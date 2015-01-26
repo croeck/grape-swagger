@@ -201,7 +201,28 @@ module Grape
                                   @@documentation_class.parse_entity_name(raw_data_type)
                                 end
                 description   = value.is_a?(Hash) ? value[:desc] || value[:description] : ''
-                required      = value.is_a?(Hash) ? !!value[:required] : false
+
+                # process 'required_details' or simply 'required'
+                required_details = value.is_a?(Hash) ? value[:required_details] : nil
+                required_details = required_details[:request] unless required_details.nil?
+                unless required_details.nil?
+                  if required_details.is_a?(Hash)
+                    if required_details.key?(method.to_sym)
+                      required = required_details[method.to_sym]
+                    elsif required_details.key?(:default)
+                      # use fallback for request
+                      required = required_details[:default]
+                    end
+                  elsif required_details.is_a?(TrueClass) || required_details.is_a?(FalseClass)
+                    # requirement specified for request in general
+                    required = required_details
+                  end
+                end
+                # use general definition if no details are specified or did match the request method
+                if required.nil?
+                  required = value.is_a?(Hash) ? !!value[:required] : false
+                end
+
                 default_value = value.is_a?(Hash) ? value[:default] : nil
                 is_array      = value.is_a?(Hash) ? (value[:is_array] || false) : false
                 enum_values   = value.is_a?(Hash) ? value[:values] : nil
@@ -328,7 +349,15 @@ module Grape
                 model.documentation.each do |property_name, property_info|
                   p = property_info.dup
 
-                  required << property_name.to_s if p.delete(:required)
+                  required_details = property_info.is_a?(Hash) ? property_info[:required_details] : nil
+                  required_details = required_details[:response] unless required_details.nil?
+
+                  if !!required_details
+                    required << property_name.to_s
+                  elsif required_details.nil?
+                    # use general definition if no response details are specified
+                    required << property_name.to_s if p.delete(:required)
+                  end
 
                   type = if p[:type]
                            p.delete(:type)
